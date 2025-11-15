@@ -1,0 +1,1 @@
+python -m vidore_benchmark.cli.main evaluate-retriever --model-class colpali --model-name vidore/colpali-v1.3 --dataset-format qa --dataset-name vidore/docvqa_test_subsampled --split test
