@@ -46,13 +46,27 @@ class ViDoReEvaluatorQA(BaseViDoReEvaluator):
           the BEIR format.
         """
         # Preprocess the dataset, get qrels, and deduplicate the queries and passages
-        ds = ds.map(lambda example, idx: {self.id_column: idx}, with_indices=True)
+        # Add id column only if it doesn't exist
+        if self.id_column not in ds.column_names:
+            ds = ds.map(lambda example, idx: {self.id_column: idx}, with_indices=True)
 
+        # Handle missing columns gracefully
+        required_passage_columns = [self.passage_column]
+        if self.image_hash_column in ds.column_names:
+            required_passage_columns.append(self.image_hash_column)
+        if self.id_column in ds.column_names:
+            required_passage_columns.append(self.id_column)
+            
         ds_passages = ds.remove_columns(
-            [col for col in ds.column_names if col not in [self.passage_column, self.image_hash_column, self.id_column]]
+            [col for col in ds.column_names if col not in required_passage_columns]
         )
+        
+        required_query_columns = [self.query_column]
+        if self.id_column in ds.column_names:
+            required_query_columns.append(self.id_column)
+            
         ds_queries = ds.remove_columns(
-            [col for col in ds.column_names if col not in [self.query_column, self.id_column]]
+            [col for col in ds.column_names if col not in required_query_columns]
         )
         ds_queries = deduplicate_dataset_rows(ds=ds_queries, target_column=self.query_column)
 
@@ -139,13 +153,19 @@ class ViDoReEvaluatorQA(BaseViDoReEvaluator):
         relevant_docs = {}
         results = {}
 
-        queries2filename = {
-            query: image_filename
-            for query, image_filename in zip(ds[self.query_column], ds[self.passage_filename_column])
-        }
-        passages2filename = {
-            docidx: image_filename for docidx, image_filename in enumerate(ds[self.passage_filename_column])
-        }
+        # Handle missing image_filename column by generating synthetic filenames
+        if self.passage_filename_column in ds.column_names:
+            queries2filename = {
+                query: image_filename
+                for query, image_filename in zip(ds[self.query_column], ds[self.passage_filename_column])
+            }
+            passages2filename = {
+                docidx: image_filename for docidx, image_filename in enumerate(ds[self.passage_filename_column])
+            }
+        else:
+            # Generate synthetic filenames if image_filename column is missing
+            queries2filename = {query: f"doc_{idx}" for idx, query in enumerate(queries)}
+            passages2filename = {idx: f"doc_{idx}" for idx in range(len(ds))}
 
         for query, score_per_query in zip(queries, scores):
             relevant_docs[query] = {queries2filename[query]: 1}

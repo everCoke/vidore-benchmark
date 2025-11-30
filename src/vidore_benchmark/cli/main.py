@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated, Dict, List, Optional, cast
 
 import typer
-from datasets import Dataset, load_dataset
+from datasets import Dataset, load_dataset, load_from_disk
 from dotenv import load_dotenv
 from tqdm import tqdm
 from transformers import set_seed
@@ -61,14 +61,36 @@ def _get_metrics_from_vidore_evaluator(
     Rooter function to get metrics from the ViDoRe evaluator depending on the dataset format.
     """
     if dataset_format.lower() == "qa":
-        ds = cast(Dataset, load_dataset(dataset_name, split=split))
+        # Check if dataset_name is a local path
+        if Path(dataset_name).exists():
+            ds = cast(Dataset, load_from_disk(dataset_name))
+        else:
+            ds = cast(Dataset, load_dataset(dataset_name, split=split))
         vidore_evaluator = ViDoReEvaluatorQA(vision_retriever)
     elif dataset_format.lower() == "beir":
-        ds = {
-            "corpus": cast(Dataset, load_dataset(dataset_name, name="corpus", split=split)),
-            "queries": cast(Dataset, load_dataset(dataset_name, name="queries", split=split)),
-            "qrels": cast(Dataset, load_dataset(dataset_name, name="qrels", split=split)),
-        }
+        # Check if dataset_name is a local path
+        if Path(dataset_name).exists():
+            # For local datasets, attempt to load from disk
+            try:
+                ds = {
+                    "corpus": cast(Dataset, load_from_disk(f"{dataset_name}/corpus")),
+                    "queries": cast(Dataset, load_from_disk(f"{dataset_name}/queries")),
+                    "qrels": cast(Dataset, load_from_disk(f"{dataset_name}/qrels")),
+                }
+            except FileNotFoundError:
+                # Fallback: try to load the whole dataset from disk
+                loaded_ds = load_from_disk(dataset_name)
+                ds = {
+                    "corpus": loaded_ds["corpus"],
+                    "queries": loaded_ds["queries"], 
+                    "qrels": loaded_ds["qrels"],
+                }
+        else:
+            ds = {
+                "corpus": cast(Dataset, load_dataset(dataset_name, name="corpus", split=split)),
+                "queries": cast(Dataset, load_dataset(dataset_name, name="queries", split=split)),
+                "qrels": cast(Dataset, load_dataset(dataset_name, name="qrels", split=split)),
+            }
         vidore_evaluator = ViDoReEvaluatorBEIR(vision_retriever)
     else:
         raise ValueError(f"Unsupported dataset format: {dataset_format}")
