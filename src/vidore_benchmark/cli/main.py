@@ -64,7 +64,7 @@ def _get_metrics_from_vidore_evaluator(
         # Check if dataset_name is a local path
         if Path(dataset_name).exists():
             ds = cast(Dataset, load_from_disk(dataset_name))
-            ds = ds[splite]
+            ds = ds[split]
         else:
             ds = cast(Dataset, load_dataset(dataset_name, split=split))
         vidore_evaluator = ViDoReEvaluatorQA(vision_retriever)
